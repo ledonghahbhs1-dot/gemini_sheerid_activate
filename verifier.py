@@ -957,7 +957,7 @@ class GeminiVerifier:
             if not proxy.startswith("http"):
                 proxy = f"http://{proxy}"
             proxy_url = proxy
-        self.client = httpx.Client(timeout=30, proxy=proxy_url)
+        self.client = httpx.Client(timeout=15, proxy=proxy_url)
         self.lib_name = "httpx"
 
     def cancel(self):
@@ -989,16 +989,28 @@ class GeminiVerifier:
         match = re.search(r"verificationId=([a-f0-9]+)", url, re.IGNORECASE)
         return match.group(1) if match else None
 
-    def _request(self, method: str, endpoint: str, body: Dict = None) -> Tuple[Dict, int]:
-        random_delay()
-        try:
-            headers = get_headers(for_sheerid=True) if HAS_ANTI_DETECT else {"Content-Type": "application/json"}
-            resp = self.client.request(method, f"{SHEERID_API_URL}{endpoint}", json=body, headers=headers)
-            try: parsed = resp.json() if resp.text else {}
-            except Exception: parsed = {"_text": resp.text}
-            return parsed, resp.status_code
-        except Exception as e:
-            raise Exception(f"Request failed: {e}")
+    def _request(self, method: str, endpoint: str, body: Dict = None, max_retries: int = 2) -> Tuple[Dict, int]:
+        last_exc = None
+        for attempt in range(1, max_retries + 2):
+            random_delay()
+            try:
+                headers = get_headers(for_sheerid=True) if HAS_ANTI_DETECT else {"Content-Type": "application/json"}
+                resp = self.client.request(method, f"{SHEERID_API_URL}{endpoint}", json=body, headers=headers)
+                try: parsed = resp.json() if resp.text else {}
+                except Exception: parsed = {"_text": resp.text}
+                return parsed, resp.status_code
+            except Exception as e:
+                last_exc = e
+                if attempt <= max_retries:
+                    self.log(f"⚠️ Yêu cầu tới SheerID bị chậm/timeout (Lần {attempt}), đang tự động thử lại...", level="warning")
+                    time.sleep(1)
+                    if ("timed out" in str(e).lower() or "timeout" in str(e).lower()) and self.proxy:
+                        self.log("⚡ Proxy node phản hồi quá chậm, tự động thử đổi sang kết nối dự phòng của server...", level="info")
+                        try: self.client.close()
+                        except Exception: pass
+                        self.client = httpx.Client(timeout=15)
+                    continue
+        raise Exception(f"Request failed: {last_exc}")
 
     def _upload_s3(self, url: str, data: bytes) -> bool:
         attempts = [
