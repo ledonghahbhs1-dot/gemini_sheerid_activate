@@ -25,6 +25,7 @@ from verifier import (
     Stats,
     UNIVERSITIES,
     rotate_residential_proxy,
+    auto_rotate_session,
     check_proxy_ip,
     mask_proxy_url,
     stats,
@@ -157,8 +158,14 @@ def run_verification_worker(
         # Determine proxy configuration
         active_proxy = None
         if req.proxy_mode == "custom" and req.custom_proxy:
-            active_proxy = req.custom_proxy.strip()
-            emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": f"🌐 Đang sử dụng Proxy tùy chỉnh: {mask_proxy_url(active_proxy)}", "level": "info", "progress": 4})
+            raw_custom = req.custom_proxy.strip()
+            rotated_custom, new_sid = auto_rotate_session(raw_custom)
+            if new_sid:
+                active_proxy = rotated_custom
+                emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": f"🔄 Đã tự động đổi sang Session mới: {new_sid} (Đổi IP Dân cư)", "level": "info"})
+            else:
+                active_proxy = raw_custom
+            emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": f"🌐 Đang sử dụng Proxy: {mask_proxy_url(active_proxy)}", "level": "info", "progress": 4})
         elif req.proxy_mode == "env":
             emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": "🔄 Đang cấp phát IP Dân cư Mỹ mới từ cấu hình hệ thống...", "level": "info", "progress": 3})
             p_url, old_ip, new_ip, sid = rotate_residential_proxy()

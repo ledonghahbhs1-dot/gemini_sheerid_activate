@@ -210,11 +210,11 @@
                                 <div class="space-y-2">
                                     <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
                                         <input type="radio" name="proxy_mode" value="env" checked onchange="updateProxyMode()" class="text-blue-500 focus:ring-0">
-                                        <span>Dùng Proxy Dân Cư từ Môi trường (Proxy-Cheap/Railway)</span>
+                                        <span>Dùng Proxy Dân Cư từ Môi trường (Tự động xoay Session đổi IP)</span>
                                     </label>
                                     <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
                                         <input type="radio" name="proxy_mode" value="custom" onchange="updateProxyMode()" class="text-blue-500 focus:ring-0">
-                                        <span>Tùy chỉnh Proxy URL riêng</span>
+                                        <span>Tùy chỉnh Proxy URL riêng (Tự động xoay Session nếu có)</span>
                                     </label>
                                     <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
                                         <input type="radio" name="proxy_mode" value="direct" onchange="updateProxyMode()" class="text-blue-500 focus:ring-0">
@@ -222,8 +222,9 @@
                                     </label>
                                 </div>
                                 <div id="customProxyBox" class="hidden pt-2">
-                                    <input type="text" id="customProxyInput" placeholder="http://user:pass@host:port"
+                                    <input type="text" id="customProxyInput" placeholder="http://user-session-xxx:pass@host:port"
                                         class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono">
+                                    <p class="text-[10px] text-slate-400 mt-1">🔄 Tự động sinh và thay thế session mới mỗi lần bấm xác minh.</p>
                                 </div>
                             </div>
                         </div>

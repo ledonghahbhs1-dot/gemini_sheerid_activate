@@ -120,19 +120,44 @@ def get_proxy_config() -> Optional[Tuple[str, str, str, str, str, str]]:
     return user, pass_base, host, str(port), country, str(ttl)
 
 
-def generate_proxy_url(session_id: Optional[int] = None) -> Tuple[Optional[str], Optional[int]]:
-    """Generate proxy URL with random 8-digit session ID"""
+def auto_rotate_session(proxy_url: Optional[str], session_id: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Tự động xoay session ID cho proxy residential để lấy IP mới:
+    Hỗ trợ TrueProxies, Proxy-Cheap, Smartproxy, v.v.
+    """
+    if not proxy_url:
+        return None, None
+        
+    sid = session_id or ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+    
+    if "-session-" in proxy_url:
+        rotated = re.sub(r"-session-[a-zA-Z0-9]+", f"-session-{sid}", proxy_url)
+        return rotated, sid
+        
+    if "_session-" in proxy_url:
+        rotated = re.sub(r"_session-[a-zA-Z0-9]+", f"_session-{sid}", proxy_url)
+        return rotated, sid
+        
+    if "session-" in proxy_url:
+        rotated = re.sub(r"session-[a-zA-Z0-9]+", f"session-{sid}", proxy_url)
+        return rotated, sid
+
+    return proxy_url, None
+
+
+def generate_proxy_url(session_id: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
+    """Tạo URL proxy với session ID ngẫu nhiên mới"""
+    sid = session_id or ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+    
     cfg = get_proxy_config()
     if not cfg:
-        # Check if direct proxy URL is configured
         default_p = get_env_var("DEFAULT_PROXY") or get_env_var("HTTP_PROXY") or get_env_var("HTTPS_PROXY")
-        if default_p and "-session-" in default_p:
-            sid = session_id if session_id is not None else random.randint(10_000_000, 99_999_999)
-            rotated = re.sub(r"-session-[a-zA-Z0-9]+", f"-session-{sid}", default_p)
-            return rotated, sid
-        return default_p, None
+        if default_p:
+            rotated, rotated_sid = auto_rotate_session(default_p, sid)
+            return rotated, (rotated_sid or "default")
+        return None, None
+        
     user, pass_base, host, port, country, ttl = cfg
-    sid = session_id if session_id is not None else random.randint(10_000_000, 99_999_999)
     pw = f"{pass_base}_country-{country}_session-{sid}_ttl-{ttl}"
     proxy_url = f"http://{user}:{pw}@{host}:{port}"
     return proxy_url, sid
