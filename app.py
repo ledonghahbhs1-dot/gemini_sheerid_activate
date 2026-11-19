@@ -169,12 +169,12 @@ def run_verification_worker(
         elif req.proxy_mode == "env":
             emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": "🔄 Đang tự động kết nối Proxy-Cheap qua API & cấp phát IP Dân cư Mỹ mới...", "level": "info", "progress": 3})
             p_url, old_ip, new_ip, sid = rotate_residential_proxy()
-            active_proxy = p_url
-            if str(new_ip).startswith("Error:"):
+            if not p_url or str(new_ip).startswith("Error:") or new_ip in ["Unknown", "Failed"]:
                 emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": f"❌ LỖI PROXY: {new_ip}", "level": "error"})
-                emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": "⚠️ Proxy gặp lỗi. Tự động chuyển sang IP trực tiếp của server...", "level": "warning"})
+                emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": "⚠️ Proxy gặp lỗi (hết hạn hoặc không phản hồi). Tự động chuyển sang IP trực tiếp của server...", "level": "warning"})
                 active_proxy = None
             else:
+                active_proxy = p_url
                 if sid:
                     emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": f"🔒 Session ID mới: {sid} (Cố định 10 phút)", "level": "info"})
                 emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": f"🟢 IP Dân cư Mỹ được cấp: {new_ip} (Proxy: {mask_proxy_url(active_proxy)})", "level": "success", "progress": 5})

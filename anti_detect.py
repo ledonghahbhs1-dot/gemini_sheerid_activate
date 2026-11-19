@@ -137,7 +137,7 @@ def get_headers(for_sheerid: bool = True, with_auth: str = None) -> dict:
     # Base headers (proper ordering like real browser)
     headers = {
         "accept": "application/json, text/plain, */*",
-        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-encoding": "gzip, deflate, br",
         "accept-language": language,
         "cache-control": "no-cache",
         "pragma": "no-cache",
@@ -224,7 +224,8 @@ def create_session(proxy: str = None):
     try:
         import httpx
         proxy_url = proxies.get("all://") if proxies else None
-        session = httpx.Client(timeout=15, proxy=proxy_url)
+        timeout = httpx.Timeout(timeout=30.0, connect=20.0, read=30.0, write=20.0, pool=15.0)
+        session = httpx.Client(timeout=timeout, proxy=proxy_url)
         return session, "httpx"
     except ImportError:
         pass

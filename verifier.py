@@ -208,7 +208,7 @@ def mask_proxy_url(proxy_url: Optional[str]) -> str:
     return re.sub(r":([^@:]+)@", ":***@", proxy_url)
 
 
-def check_proxy_ip(proxy_url: Optional[str], timeout: int = 6, max_retries: int = 2) -> str:
+def check_proxy_ip(proxy_url: Optional[str], timeout: int = 10, max_retries: int = 2) -> str:
     """Check current public IP via proxy with fast failure on auth errors"""
     if not proxy_url:
         try:
@@ -221,6 +221,7 @@ def check_proxy_ip(proxy_url: Optional[str], timeout: int = 6, max_retries: int 
 
     endpoints = [
         "https://api.ipify.org?format=json",
+        "https://checkip.amazonaws.com",
         "https://ipv4.icanhazip.com"
     ]
     
@@ -249,16 +250,18 @@ def rotate_residential_proxy(max_retries: int = 3) -> Tuple[Optional[str], str, 
     if not candidate_proxy:
         return None, "Direct", "Direct", None
 
+    candidate_ip = "Unknown"
     for attempt in range(1, max_retries + 1):
         candidate_proxy, sid = generate_proxy_url()
-        candidate_ip = check_proxy_ip(candidate_proxy)
+        candidate_ip = check_proxy_ip(candidate_proxy, timeout=10)
         
         if candidate_ip != "Unknown" and not str(candidate_ip).startswith("Error"):
             return candidate_proxy, candidate_ip, candidate_ip, sid
             
         time.sleep(0.5)
         
-    return candidate_proxy, candidate_ip, candidate_ip, sid
+    err_label = candidate_ip if str(candidate_ip).startswith("Error") else "Error: Proxy không phản hồi (Timeout)"
+    return None, err_label, err_label, sid
 
 
 # ============ UNIVERSITIES DATABASE ============
@@ -957,7 +960,8 @@ class GeminiVerifier:
             if not proxy.startswith("http"):
                 proxy = f"http://{proxy}"
             proxy_url = proxy
-        self.client = httpx.Client(timeout=15, proxy=proxy_url)
+        timeout = httpx.Timeout(timeout=30.0, connect=20.0, read=30.0, write=20.0, pool=15.0)
+        self.client = httpx.Client(timeout=timeout, proxy=proxy_url)
         self.lib_name = "httpx"
 
     def cancel(self):
@@ -989,10 +993,13 @@ class GeminiVerifier:
         match = re.search(r"verificationId=([a-f0-9]+)", url, re.IGNORECASE)
         return match.group(1) if match else None
 
-    def _request(self, method: str, endpoint: str, body: Dict = None, max_retries: int = 2) -> Tuple[Dict, int]:
+    def _request(self, method: str, endpoint: str, body: Dict = None, max_retries: int = 3) -> Tuple[Dict, int]:
         last_exc = None
         for attempt in range(1, max_retries + 2):
-            random_delay()
+            if attempt > 1:
+                time.sleep(1.5)
+            else:
+                random_delay()
             try:
                 headers = get_headers(for_sheerid=True) if HAS_ANTI_DETECT else {"Content-Type": "application/json"}
                 resp = self.client.request(method, f"{SHEERID_API_URL}{endpoint}", json=body, headers=headers)
@@ -1002,13 +1009,33 @@ class GeminiVerifier:
             except Exception as e:
                 last_exc = e
                 if attempt <= max_retries:
-                    self.log(f"⚠️ Yêu cầu tới SheerID bị chậm/timeout (Lần {attempt}), đang tự động thử lại...", level="warning")
-                    time.sleep(1)
-                    if ("timed out" in str(e).lower() or "timeout" in str(e).lower()) and self.proxy:
-                        self.log("⚡ Proxy node phản hồi quá chậm, tự động thử đổi sang kết nối dự phòng của server...", level="info")
-                        try: self.client.close()
-                        except Exception: pass
-                        self.client = httpx.Client(timeout=15)
+                    err_name = type(e).__name__
+                    err_str = f" [{err_name}]" if not str(e) else f" [{err_name}: {str(e)[:60]}]"
+                    self.log(f"⚠️ Yêu cầu tới SheerID bị chậm/timeout (Lần {attempt}/{max_retries}){err_str}, đang tự động thử lại...", level="warning")
+                    
+                    if self.proxy:
+                        # Thử đổi session ID residential proxy sang node khác
+                        rotated_proxy, new_sid = auto_rotate_session(self.proxy)
+                        if not new_sid or rotated_proxy == self.proxy:
+                            rotated_proxy, new_sid = generate_proxy_url()
+                        
+                        if rotated_proxy and rotated_proxy != self.proxy:
+                            self.log(f"🔄 Proxy node phản hồi chậm, tự động xoay sang Session IP dân cư mới ({new_sid})...", level="info")
+                            try: self.client.close()
+                            except Exception: pass
+                            self.proxy = rotated_proxy
+                            timeout = httpx.Timeout(timeout=30.0, connect=20.0, read=30.0, write=20.0, pool=15.0)
+                            self.client = httpx.Client(timeout=timeout, proxy=rotated_proxy)
+                            continue
+                        elif attempt >= max_retries:
+                            # Lần thử cuối cùng: thử chuyển sang kết nối trực tiếp của server
+                            self.log("⚡ Thử đổi sang kết nối dự phòng trực tiếp của server...", level="warning")
+                            try: self.client.close()
+                            except Exception: pass
+                            timeout = httpx.Timeout(timeout=25.0, connect=15.0)
+                            self.client = httpx.Client(timeout=timeout)
+                            self.proxy = None
+                            continue
                     continue
         raise Exception(f"Request failed: {last_exc}")
 
@@ -1016,7 +1043,9 @@ class GeminiVerifier:
         attempts = [
             lambda: self.client.put(url, content=data, headers={"Content-Type": "image/png"}, timeout=60),
             lambda: self.client.put(url, data=data, headers={"Content-Type": "image/png"}, timeout=60),
-            lambda: self.client.request("PUT", url, data=data, headers={"Content-Type": "image/png"}, timeout=60)
+            lambda: self.client.request("PUT", url, data=data, headers={"Content-Type": "image/png"}, timeout=60),
+            # Direct upload fallback (S3 presigned URLs accept direct connections reliably)
+            lambda: httpx.put(url, content=data, headers={"Content-Type": "image/png"}, timeout=60)
         ]
         last_exc = None
         for fn in attempts:
