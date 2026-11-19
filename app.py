@@ -163,9 +163,14 @@ def run_verification_worker(
             emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": "🔄 Đang cấp phát IP Dân cư Mỹ mới từ cấu hình hệ thống...", "level": "info", "progress": 3})
             p_url, old_ip, new_ip, sid = rotate_residential_proxy()
             active_proxy = p_url
-            if sid:
-                emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": f"🔒 Sticky Session ID: {str(sid)[:4]}**** (Cố định 10 phút)", "level": "info"})
-            emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": f"🟢 IP Dân cư được cấp: {new_ip} (Proxy: {mask_proxy_url(active_proxy)})", "level": "success", "progress": 5})
+            if str(new_ip).startswith("Error:"):
+                emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": f"❌ LỖI PROXY: {new_ip}", "level": "error"})
+                emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": "⚠️ Proxy trong biến môi trường không hoạt động (lỗi 407/hết hạn). Tự động chuyển sang IP trực tiếp của server...", "level": "warning"})
+                active_proxy = None
+            else:
+                if sid:
+                    emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": f"🔒 Sticky Session ID: {str(sid)[:4]}**** (Cố định 10 phút)", "level": "info"})
+                emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": f"🟢 IP Dân cư được cấp: {new_ip} (Proxy: {mask_proxy_url(active_proxy)})", "level": "success", "progress": 5})
         else:
             emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": "ℹ️ Chạy kết nối trực tiếp không qua proxy", "level": "info", "progress": 4})
 

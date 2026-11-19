@@ -144,10 +144,9 @@ def mask_proxy_url(proxy_url: Optional[str]) -> str:
     return re.sub(r":([^@:]+)@", ":***@", proxy_url)
 
 
-def check_proxy_ip(proxy_url: Optional[str], timeout: int = 15, max_retries: int = 3) -> str:
-    """Check current public IP via proxy with retries and multiple endpoints"""
+def check_proxy_ip(proxy_url: Optional[str], timeout: int = 6, max_retries: int = 2) -> str:
+    """Check current public IP via proxy with fast failure on auth errors"""
     if not proxy_url:
-        # Direct connection check
         try:
             resp = httpx.get("https://api.ipify.org?format=json", timeout=timeout)
             if resp.status_code == 200:
@@ -157,9 +156,8 @@ def check_proxy_ip(proxy_url: Optional[str], timeout: int = 15, max_retries: int
         return "Direct IP"
 
     endpoints = [
-        "https://ipv4.icanhazip.com",
         "https://api.ipify.org?format=json",
-        "https://api64.ipify.org?format=json"
+        "https://ipv4.icanhazip.com"
     ]
     
     for attempt in range(max_retries):
@@ -170,34 +168,38 @@ def check_proxy_ip(proxy_url: Optional[str], timeout: int = 15, max_retries: int
                     if "json" in ep:
                         return resp.json().get("ip", "Unknown")
                     return resp.text.strip()
-                elif resp.status_code == 502:
-                    if attempt < max_retries - 1:
-                        time.sleep(2)
-                        break
+                elif resp.status_code == 407:
+                    return "Error: 407 Proxy Auth Required (Hết hạn hoặc sai user/pass)"
+            except httpx.ProxyError as pe:
+                if "407" in str(pe):
+                    return "Error: 407 Proxy Auth Required (Hết hạn hoặc sai user/pass)"
+                return f"Error: Proxy Connection Error ({pe})"
             except Exception:
                 continue
     return "Unknown"
 
 
-def rotate_residential_proxy(max_retries: int = 3) -> Tuple[Optional[str], str, str, Optional[int]]:
+def rotate_residential_proxy(max_retries: int = 2) -> Tuple[Optional[str], str, str, Optional[int]]:
     """Allocate a fresh US residential proxy session and return (proxy_url, old_ip, new_ip, sid)"""
     p_initial, sid_initial = generate_proxy_url()
     if not p_initial:
         return None, "Direct", "Direct", None
         
     old_ip = check_proxy_ip(p_initial)
-    
+    if str(old_ip).startswith("Error:"):
+        return p_initial, old_ip, old_ip, sid_initial
+        
     for attempt in range(1, max_retries + 1):
         candidate_proxy, sid = generate_proxy_url()
         candidate_ip = check_proxy_ip(candidate_proxy)
         
-        if candidate_ip != "Unknown" and not candidate_ip.startswith("Error") and candidate_ip != old_ip:
+        if candidate_ip != "Unknown" and not str(candidate_ip).startswith("Error") and candidate_ip != old_ip:
             return candidate_proxy, old_ip, candidate_ip, sid
             
-        if candidate_ip != "Unknown" and not candidate_ip.startswith("Error") and attempt == max_retries:
+        if candidate_ip != "Unknown" and not str(candidate_ip).startswith("Error") and attempt == max_retries:
             return candidate_proxy, old_ip, candidate_ip, sid
             
-        time.sleep(1)
+        time.sleep(0.5)
         
     return p_initial, old_ip, old_ip, sid_initial
 
