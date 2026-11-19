@@ -1,0 +1,23 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Output generated folders and logs
+output/*
+!output/.gitkeep
+
+# Environment variables
+.env
+.env.local
+
+# Backups and temporary files
+*.bak
+*.bak*
+*.tmp
+*.log
+
+# Editor directories
+.vscode/
+.idea/
+.DS_Store
