@@ -126,6 +126,10 @@ def generate_proxy_url(session_id: Optional[int] = None) -> Tuple[Optional[str],
     if not cfg:
         # Check if direct proxy URL is configured
         default_p = get_env_var("DEFAULT_PROXY") or get_env_var("HTTP_PROXY") or get_env_var("HTTPS_PROXY")
+        if default_p and "-session-" in default_p:
+            sid = session_id if session_id is not None else random.randint(10_000_000, 99_999_999)
+            rotated = re.sub(r"-session-[a-zA-Z0-9]+", f"-session-{sid}", default_p)
+            return rotated, sid
         return default_p, None
     user, pass_base, host, port, country, ttl = cfg
     sid = session_id if session_id is not None else random.randint(10_000_000, 99_999_999)
