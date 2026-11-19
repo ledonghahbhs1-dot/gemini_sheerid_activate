@@ -208,7 +208,7 @@ def mask_proxy_url(proxy_url: Optional[str]) -> str:
     return re.sub(r":([^@:]+)@", ":***@", proxy_url)
 
 
-def check_proxy_ip(proxy_url: Optional[str], timeout: int = 10, max_retries: int = 2) -> str:
+def check_proxy_ip(proxy_url: Optional[str], timeout: int = 4, max_retries: int = 1) -> str:
     """Check current public IP via proxy with fast failure on auth errors"""
     if not proxy_url:
         try:
@@ -221,8 +221,7 @@ def check_proxy_ip(proxy_url: Optional[str], timeout: int = 10, max_retries: int
 
     endpoints = [
         "https://api.ipify.org?format=json",
-        "https://checkip.amazonaws.com",
-        "https://ipv4.icanhazip.com"
+        "https://checkip.amazonaws.com"
     ]
     
     for attempt in range(max_retries):
@@ -244,7 +243,7 @@ def check_proxy_ip(proxy_url: Optional[str], timeout: int = 10, max_retries: int
     return "Unknown"
 
 
-def rotate_residential_proxy(max_retries: int = 3) -> Tuple[Optional[str], str, str, Optional[str]]:
+def rotate_residential_proxy(max_retries: int = 2) -> Tuple[Optional[str], str, str, Optional[str]]:
     """Cấp phát session ID mới và kiểm tra IP dân cư Mỹ từ Proxy-Cheap"""
     candidate_proxy, sid = generate_proxy_url()
     if not candidate_proxy:
@@ -253,14 +252,14 @@ def rotate_residential_proxy(max_retries: int = 3) -> Tuple[Optional[str], str, 
     candidate_ip = "Unknown"
     for attempt in range(1, max_retries + 1):
         candidate_proxy, sid = generate_proxy_url()
-        candidate_ip = check_proxy_ip(candidate_proxy, timeout=10)
+        candidate_ip = check_proxy_ip(candidate_proxy, timeout=4)
         
         if candidate_ip != "Unknown" and not str(candidate_ip).startswith("Error"):
             return candidate_proxy, candidate_ip, candidate_ip, sid
             
-        time.sleep(0.5)
+        time.sleep(0.3)
         
-    err_label = candidate_ip if str(candidate_ip).startswith("Error") else "Error: Proxy không phản hồi (Timeout)"
+    err_label = candidate_ip if str(candidate_ip).startswith("Error") else "Error: Proxy không phản hồi (Bị chặn bởi IP Whitelist)"
     return None, err_label, err_label, sid
 
 

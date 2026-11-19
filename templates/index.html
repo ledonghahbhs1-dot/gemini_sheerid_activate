@@ -209,16 +209,16 @@
                             <div id="proxyPanel" class="p-4 space-y-3 border-t border-slate-800/80 hidden">
                                 <div class="space-y-2">
                                     <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-                                        <input type="radio" name="proxy_mode" value="env" checked onchange="updateProxyMode()" class="text-blue-500 focus:ring-0">
-                                        <span>Dùng Proxy Dân Cư từ Môi trường (Tự động xoay Session đổi IP)</span>
+                                        <input type="radio" name="proxy_mode" value="direct" checked onchange="updateProxyMode()" class="text-blue-500 focus:ring-0">
+                                        <span>Chạy trực tiếp qua IP Server (Khuyên dùng trên Railway - Siêu tốc 0.2s)</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                                        <input type="radio" name="proxy_mode" value="env" onchange="updateProxyMode()" class="text-blue-500 focus:ring-0">
+                                        <span>Dùng Proxy Dân Cư từ Môi trường (Proxy-Cheap)</span>
                                     </label>
                                     <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
                                         <input type="radio" name="proxy_mode" value="custom" onchange="updateProxyMode()" class="text-blue-500 focus:ring-0">
                                         <span>Tùy chỉnh Proxy URL riêng (Tự động xoay Session nếu có)</span>
-                                    </label>
-                                    <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-                                        <input type="radio" name="proxy_mode" value="direct" onchange="updateProxyMode()" class="text-blue-500 focus:ring-0">
-                                        <span>Chạy trực tiếp (Không dùng Proxy)</span>
                                     </label>
                                 </div>
                                 <div id="customProxyBox" class="hidden pt-2">

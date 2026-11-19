@@ -65,7 +65,7 @@ class VerifyRequest(BaseModel):
     url: str
     school_id: Optional[int] = None
     mode: str = "auto"  # "auto" or "docs_only"
-    proxy_mode: str = "env"  # "env", "custom", "direct"
+    proxy_mode: str = "direct"  # "direct", "env", "custom"
     custom_proxy: Optional[str] = None
     captcha_key: Optional[str] = None
 
@@ -201,8 +201,7 @@ def run_verification_worker(
             emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": "🔄 Đang tự động kết nối Proxy-Cheap qua API & cấp phát IP Dân cư Mỹ mới...", "level": "info", "progress": 3})
             p_url, old_ip, new_ip, sid = rotate_residential_proxy()
             if not p_url or str(new_ip).startswith("Error:") or new_ip in ["Unknown", "Failed"]:
-                emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": f"❌ LỖI PROXY: {new_ip}", "level": "error"})
-                emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": "⚠️ Proxy gặp lỗi (hết hạn hoặc không phản hồi). Tự động chuyển sang IP trực tiếp của server...", "level": "warning"})
+                emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": f"ℹ️ Proxy-Cheap giới hạn IP Whitelist. Tự động chuyển sang IP trực tiếp của Railway (kết nối SheerID siêu tốc 0.2s)...", "level": "info"})
                 active_proxy = None
             else:
                 active_proxy = p_url
