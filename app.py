@@ -102,6 +102,24 @@ async def get_server_ip():
     return {"ip": "Unknown"}
 
 
+@app.get("/api/test-sheerid")
+async def test_sheerid():
+    """Test direct connectivity from Railway to SheerID API"""
+    import time
+    from anti_detect import get_headers
+    try:
+        t0 = time.time()
+        headers = get_headers(for_sheerid=True)
+        resp = httpx.get("https://services.sheerid.com/rest/v2/verification/12345", headers=headers, timeout=10)
+        return {
+            "status": resp.status_code,
+            "duration": f"{time.time() - t0:.2f}s",
+            "body": resp.text[:200]
+        }
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"}
+
+
 @app.get("/api/stats")
 async def get_stats():
     """Get success rate statistics"""
