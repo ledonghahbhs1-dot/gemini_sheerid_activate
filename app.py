@@ -89,6 +89,18 @@ async def health_check():
     }
 
 
+@app.get("/api/server-ip")
+async def get_server_ip():
+    """Returns the server's public IP address (useful for Proxy Whitelisting)"""
+    try:
+        resp = httpx.get("https://api.ipify.org?format=json", timeout=6)
+        if resp.status_code == 200:
+            return {"ip": resp.json().get("ip")}
+    except Exception as e:
+        return {"error": str(e)}
+    return {"ip": "Unknown"}
+
+
 @app.get("/api/stats")
 async def get_stats():
     """Get success rate statistics"""
