@@ -105,8 +105,46 @@ def get_env_var(name: str) -> Optional[str]:
         return None
 
 
+_CACHED_PROXY_CHEAP: Optional[Tuple[str, str, str, str, str, str]] = None
+
+
+def fetch_proxy_cheap_credentials() -> Optional[Tuple[str, str, str, str, str, str]]:
+    """Tự động đồng bộ credentials từ Proxy-Cheap REST API (https://api.proxy-cheap.com/proxies)"""
+    global _CACHED_PROXY_CHEAP
+    if _CACHED_PROXY_CHEAP:
+        return _CACHED_PROXY_CHEAP
+
+    api_key = get_env_var("PROXY_CHEAP_API_KEY") or "01a1f415-dece-75b3-bd25-39d6d8119cb3"
+    api_secret = get_env_var("PROXY_CHEAP_API_SECRET") or "01a1f415-dece-7627-bd25-39d6d88b27c4"
+
+    if api_key and api_secret:
+        try:
+            headers = {
+                "X-Api-Key": api_key.strip(),
+                "X-Api-Secret": api_secret.strip(),
+                "Accept": "application/json"
+            }
+            resp = httpx.get("https://api.proxy-cheap.com/proxies", headers=headers, timeout=8)
+            if resp.status_code == 200:
+                data = resp.json()
+                for p in data.get("proxies", []):
+                    if p.get("status") == "ACTIVE" and p.get("serviceId") == "rotating-residential":
+                        auth = p.get("authentication", {})
+                        u = auth.get("username")
+                        pw = auth.get("password")
+                        if u and pw:
+                            _CACHED_PROXY_CHEAP = (u, pw, "thehub.proxy-cheap.com", "8080", "US", "10")
+                            return _CACHED_PROXY_CHEAP
+        except Exception:
+            pass
+
+    # Dự phòng thông tin đã xác thực trực tiếp
+    _CACHED_PROXY_CHEAP = ("e7kbQPHHUQO0vy3", "v25auuqAWEH6xHi", "thehub.proxy-cheap.com", "8080", "US", "10")
+    return _CACHED_PROXY_CHEAP
+
+
 def get_proxy_config() -> Optional[Tuple[str, str, str, str, str, str]]:
-    """Read proxy credentials from env vars if available"""
+    """Read proxy credentials from env vars, Proxy-Cheap API, or cached config"""
     user = get_env_var("PROXY_USER")
     pass_base = get_env_var("PROXY_PASS_BASE")
     host = get_env_var("PROXY_HOST") or "thehub.proxy-cheap.com"
@@ -114,10 +152,10 @@ def get_proxy_config() -> Optional[Tuple[str, str, str, str, str, str]]:
     country = get_env_var("PROXY_COUNTRY") or "US"
     ttl = get_env_var("PROXY_TTL") or "10"
     
-    if not user or not pass_base:
-        return None
+    if user and pass_base:
+        return user, pass_base, host, str(port), country, str(ttl)
         
-    return user, pass_base, host, str(port), country, str(ttl)
+    return fetch_proxy_cheap_credentials()
 
 
 def auto_rotate_session(proxy_url: Optional[str], session_id: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
@@ -146,21 +184,22 @@ def auto_rotate_session(proxy_url: Optional[str], session_id: Optional[str] = No
 
 
 def generate_proxy_url(session_id: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
-    """Tạo URL proxy với session ID ngẫu nhiên mới"""
-    sid = session_id or ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+    """Tạo URL proxy Proxy-Cheap với session ID ngẫu nhiên mới"""
+    sid = session_id or str(random.randint(10_000_000, 99_999_999))
     
     cfg = get_proxy_config()
-    if not cfg:
-        default_p = get_env_var("DEFAULT_PROXY") or get_env_var("HTTP_PROXY") or get_env_var("HTTPS_PROXY")
-        if default_p:
-            rotated, rotated_sid = auto_rotate_session(default_p, sid)
-            return rotated, (rotated_sid or "default")
-        return None, None
-        
-    user, pass_base, host, port, country, ttl = cfg
-    pw = f"{pass_base}_country-{country}_session-{sid}_ttl-{ttl}"
-    proxy_url = f"http://{user}:{pw}@{host}:{port}"
-    return proxy_url, sid
+    if cfg:
+        user, pass_base, host, port, country, ttl = cfg
+        pw = f"{pass_base}_country-{country}_session-{sid}_ttl-{ttl}"
+        proxy_url = f"http://{user}:{pw}@{host}:{port}"
+        return proxy_url, sid
+
+    default_p = get_env_var("DEFAULT_PROXY") or get_env_var("HTTP_PROXY") or get_env_var("HTTPS_PROXY")
+    if default_p:
+        rotated, rotated_sid = auto_rotate_session(default_p, sid)
+        return rotated, (rotated_sid or "default")
+
+    return None, None
 
 
 def mask_proxy_url(proxy_url: Optional[str]) -> str:
@@ -204,29 +243,22 @@ def check_proxy_ip(proxy_url: Optional[str], timeout: int = 6, max_retries: int 
     return "Unknown"
 
 
-def rotate_residential_proxy(max_retries: int = 2) -> Tuple[Optional[str], str, str, Optional[int]]:
-    """Allocate a fresh US residential proxy session and return (proxy_url, old_ip, new_ip, sid)"""
-    p_initial, sid_initial = generate_proxy_url()
-    if not p_initial:
+def rotate_residential_proxy(max_retries: int = 3) -> Tuple[Optional[str], str, str, Optional[str]]:
+    """Cấp phát session ID mới và kiểm tra IP dân cư Mỹ từ Proxy-Cheap"""
+    candidate_proxy, sid = generate_proxy_url()
+    if not candidate_proxy:
         return None, "Direct", "Direct", None
-        
-    old_ip = check_proxy_ip(p_initial)
-    if str(old_ip).startswith("Error:"):
-        return p_initial, old_ip, old_ip, sid_initial
-        
+
     for attempt in range(1, max_retries + 1):
         candidate_proxy, sid = generate_proxy_url()
         candidate_ip = check_proxy_ip(candidate_proxy)
         
-        if candidate_ip != "Unknown" and not str(candidate_ip).startswith("Error") and candidate_ip != old_ip:
-            return candidate_proxy, old_ip, candidate_ip, sid
-            
-        if candidate_ip != "Unknown" and not str(candidate_ip).startswith("Error") and attempt == max_retries:
-            return candidate_proxy, old_ip, candidate_ip, sid
+        if candidate_ip != "Unknown" and not str(candidate_ip).startswith("Error"):
+            return candidate_proxy, candidate_ip, candidate_ip, sid
             
         time.sleep(0.5)
         
-    return p_initial, old_ip, old_ip, sid_initial
+    return candidate_proxy, candidate_ip, candidate_ip, sid
 
 
 # ============ UNIVERSITIES DATABASE ============
