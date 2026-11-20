@@ -124,17 +124,16 @@ def fetch_proxy_cheap_credentials() -> Optional[Tuple[str, str, str, str, str, s
                 "X-Api-Secret": api_secret.strip(),
                 "Accept": "application/json"
             }
-            resp = httpx.get("https://api.proxy-cheap.com/proxies", headers=headers, timeout=8)
+            proxy_id = get_env_var("PROXY_CHEAP_ID") or "2653591"
+            resp = httpx.get(f"https://api.proxy-cheap.com/proxies/{proxy_id}", headers=headers, timeout=8)
             if resp.status_code == 200:
-                data = resp.json()
-                for p in data.get("proxies", []):
-                    if p.get("status") == "ACTIVE" and p.get("serviceId") == "rotating-residential":
-                        auth = p.get("authentication", {})
-                        u = auth.get("username")
-                        pw = auth.get("password")
-                        if u and pw:
-                            _CACHED_PROXY_CHEAP = (u, pw, "thehub.proxy-cheap.com", "8080", "US", "10")
-                            return _CACHED_PROXY_CHEAP
+                p = resp.json()
+                auth = p.get("authentication", {})
+                u = auth.get("username")
+                pw = auth.get("password")
+                if u and pw:
+                    _CACHED_PROXY_CHEAP = (u, pw, "thehub.proxy-cheap.com", "8080", "US", "10")
+                    return _CACHED_PROXY_CHEAP
         except Exception:
             pass
 
