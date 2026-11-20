@@ -1,6 +1,6 @@
 {
-  "total": 64,
-  "success": 27,
+  "total": 65,
+  "success": 28,
   "failed": 37,
   "orgs": {
     "University of Michigan": {
@@ -68,7 +68,7 @@
       "failed": 1
     },
     "University of Pennsylvania": {
-      "success": 7,
+      "success": 8,
       "failed": 0
     },
     "University of California, Berkeley": {

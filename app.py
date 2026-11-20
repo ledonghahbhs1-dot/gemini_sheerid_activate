@@ -156,6 +156,33 @@ async def test_proxy(url: Optional[str] = None):
     return results
 
 
+@app.get("/api/check-sheerid")
+async def check_sheerid_status(url: str):
+    """Check current verification status for any SheerID URL directly"""
+    import re
+    from anti_detect import get_headers
+    
+    vid_match = re.search(r"verificationId=([a-f0-9]+)", url)
+    if not vid_match:
+        vid_match = re.search(r"/verify/([^/?#]+)", url)
+    if not vid_match:
+        raise HTTPException(status_code=400, detail="Không tìm thấy verificationId trong URL")
+    
+    vid = vid_match.group(1)
+    headers = get_headers(for_sheerid=True)
+    try:
+        resp = httpx.get(f"https://services.sheerid.com/rest/v2/verification/{vid}", headers=headers, timeout=10)
+        data = resp.json() if resp.status_code == 200 else {}
+        return {
+            "status_code": resp.status_code,
+            "verificationId": vid,
+            "currentStep": data.get("currentStep", "unknown"),
+            "data": data
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.get("/api/stats")
 async def get_stats():
     """Get success rate statistics"""
@@ -247,8 +274,11 @@ def run_verification_worker(
         else:
             emit_event({"type": "log", "timestamp": datetime.now().strftime("%H:%M:%S"), "message": "ℹ️ Chạy kết nối trực tiếp không qua proxy", "level": "info", "progress": 4})
 
-        # Create verifier instance
-        verifier = GeminiVerifier(
+        # Create verifier instance (dynamically reload module to pick up any changes)
+        import importlib
+        import verifier as v_mod
+        importlib.reload(v_mod)
+        verifier = v_mod.GeminiVerifier(
             url=req.url,
             proxy=active_proxy,
             log_callback=log_callback,

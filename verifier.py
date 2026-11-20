@@ -1306,15 +1306,17 @@ class GeminiVerifier:
             # ==========================================
             # POLLING FOR APPROVAL
             # ==========================================
-            self.log("⏳ Bắt đầu theo dõi kết quả xét duyệt từ SheerID (Tối đa 5 phút)...", level="info", progress=92)
+            max_polls = 60  # 60 * 10s = 600s (10 phút)
+            poll_interval = 10
+            self.log(f"⏳ Bắt đầu theo dõi kết quả xét duyệt từ SheerID (Tối đa {max_polls * poll_interval // 60} phút)...", level="info", progress=92)
             final_status = "pending"
             final_data = {}
             
-            for attempt in range(20):  # 20 * 15s = 300s
+            for attempt in range(max_polls):
                 if self.is_cancelled:
                     self.log("🛑 Đã dừng theo dõi theo yêu cầu", level="warning")
                     break
-                time.sleep(15)
+                time.sleep(poll_interval)
                 check_data, _ = self._request("GET", f"/verification/{self.vid}")
                 step = check_data.get("currentStep", "")
                 
@@ -1327,7 +1329,7 @@ class GeminiVerifier:
                     final_data = check_data
                     break
                 else:
-                    self.log(f"⏳ Lần {attempt+1}/20: Trạng thái hiện tại: '{step}'. Vui lòng chờ...", level="info", progress=min(92 + attempt // 3, 98))
+                    self.log(f"⏳ Lần {attempt+1}/{max_polls}: Trạng thái hiện tại: '{step}'. Vui lòng chờ...", level="info", progress=min(92 + int(attempt * 7 / max_polls), 99))
 
             # Handle result
             if final_status == "success":
