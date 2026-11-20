@@ -120,6 +120,42 @@ async def test_sheerid():
         return {"error": f"{type(e).__name__}: {e}"}
 
 
+@app.get("/api/test-proxy")
+async def test_proxy(url: Optional[str] = None):
+    """Test proxy connectivity from Railway container"""
+    import time
+    results = {}
+    
+    # Target URLs to test
+    proxies_to_test = {}
+    if url:
+        proxies_to_test["custom"] = url
+    else:
+        proxies_to_test["whitelist_only (no auth)"] = "http://thehub.proxy-cheap.com:8080"
+        proxies_to_test["user_pass_plain"] = "http://e7kbQPHHUQO0vy3:v25auuqAWEH6xHi@thehub.proxy-cheap.com:8080"
+        proxies_to_test["user_pass_session"] = "http://e7kbQPHHUQO0vy3:v25auuqAWEH6xHi_country-US_session-99112233_ttl-10@thehub.proxy-cheap.com:8080"
+
+    for label, p_url in proxies_to_test.items():
+        t0 = time.time()
+        try:
+            with httpx.Client(proxy=p_url, timeout=5.0) as client:
+                r = client.get("https://api.ipify.org?format=json")
+                results[label] = {
+                    "success": True,
+                    "status": r.status_code,
+                    "ip": r.json().get("ip") if r.status_code == 200 else r.text[:100],
+                    "duration": f"{time.time() - t0:.2f}s"
+                }
+        except Exception as e:
+            results[label] = {
+                "success": False,
+                "error": f"{type(e).__name__}: {str(e)}",
+                "duration": f"{time.time() - t0:.2f}s"
+            }
+            
+    return results
+
+
 @app.get("/api/stats")
 async def get_stats():
     """Get success rate statistics"""
